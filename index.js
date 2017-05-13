@@ -12,6 +12,16 @@ require('console-stamp')(console, { pattern: 'HH:MM:ss.l'});
 // Конфиг с токеном для Телеграм
 global.config = require('./config');
 global.parse_html = {parse_mode:'HTML'};
+const keyboard = {
+	parse_mode: 'HTML',
+	reply_markup: {
+		keyboard: [
+			[{text: 'Список сериалов'}],
+			[{text: 'Избранное'}],
+			[{text: '🔍Поиск'}]
+		]
+	}
+};
 
 // Либа для работы с Телеграмом
 const TelegramBot = require('node-telegram-bot-api');
@@ -30,87 +40,98 @@ require('./push')();
 global.fixId = function fixId(body) {
 	let temp = [];
 	for (let i in body.data)
-		temp.push({
-			alias: body.data[i].alias,
-			channels: body.data[i].channels,
-			date: body.data[i].date,
-			genres: body.data[i].genres,
-			has_icon: body.data[i].has_icon,
-			has_image: body.data[i].has_image,
-			id: parseInt(body.data[i].id),
-			img: body.data[i].img,
-			link: body.data[i].link,
-			not_favorited: body.data[i].not_favorited,
-			rating: body.data[i].rating,
-			status: body.data[i].status,
-			status_5: body.data[i].status_5,
-			status_auto: body.data[i].status_auto,
-			status_auto_: body.data[i].status_auto_,
-			status_season: body.data[i].status_season,
-			title: body.data[i].title,
-			title_orig: body.data[i].title_orig
-		});
+		if (body.data.hasOwnProperty(i))
+			temp.push({
+				alias: body.data[i].alias,
+				channels: body.data[i].channels,
+				date: body.data[i].date,
+				genres: body.data[i].genres,
+				has_icon: body.data[i].has_icon,
+				has_image: body.data[i].has_image,
+				id: parseInt(body.data[i].id),
+				img: body.data[i].img,
+				link: body.data[i].link,
+				not_favorited: body.data[i].not_favorited,
+				rating: body.data[i].rating,
+				status: body.data[i].status,
+				status_5: body.data[i].status_5,
+				status_auto: body.data[i].status_auto,
+				status_auto_: body.data[i].status_auto_,
+				status_season: body.data[i].status_season,
+				title: body.data[i].title,
+				title_orig: body.data[i].title_orig
+			});
 	return temp;
 };
 
 bot.onText(/^\/start/, function (msg) {
-	bot.sendMessage(msg.chat.id, 'Жми /help, чтобы узнать базовые команды.',
-		{
-			reply_markup: {
-				keyboard: [
-					[{text: 'Список сериалов'}],
-					[{text: 'Избранное'}],
-					[{text: '🔍Поиск'}]
-				]
-			}
-		});
+	bot.sendMessage(msg.chat.id, 'Жми /help, чтобы узнать базовые команды.', keyboard);
 });
 
 bot.onText(/^\/help/, function (msg) {
 	bot.sendMessage(msg.chat.id,
-		'/login <code>email pass</code> - Авторизация\n' +
+		'/start - Если пропала удобная клавиатура ¯\\_(ツ)_/¯\n' +
+		'/login - Авторизация\n' +
 		'/list - Список сериалов по дате выхода\n' +
-		'/mylist - Список избранных сериалов по дате выхода\n', parse_html);
+		'/mylist - Список избранных сериалов по дате выхода\n' +
+		'/search - Поиск среди всех озвученных сериалов\n\n' +
+		'<code>/about_</code> - Описание сериала\n' +
+		'<code>/full_</code> - Все сезоны и серии сериала\n' +
+		'<code>/fav_</code> - Добавить/Удалить сериал из Избранного\n' +
+		'<code>/dl_</code> - Загрузить серию/сезон\n' +
+		'<code>/mw_</code> - Отметить серию/сезон (не)просмотренной\n\n' +
+		'Ограничения Telegram не позволяют передавать напрямую torrent-файлы, ' +
+		'поэтому все три типа качества упакованы в один ZIP-архив.', parse_html);
 });
 
 // Логинит нас и сохраняет куку в базу данных.
-bot.onText(/^\/login (.+) (.+)/, function (msg, match) {
-	const options = {
-		method: 'POST',
-		url: 'https://lostfilm.tv/ajaxik.php',
-		formData: {
-			act: 'users',
-			type: 'login',
-			mail: match[1],
-			pass: match[2],
-			rem: '1'
-		}
-	};
+bot.onText(/^\/login/, function (msg) {
+	bot.sendMessage(msg.chat.id, 'Введите логин:', {reply_markup: {force_reply: true}})
+		.then(function (res) {
+			bot.onReplyToMessage(msg.chat.id, res.message_id, function (login) {
+				bot.sendMessage(msg.chat.id, 'Введите пароль:', {reply_markup: {force_reply: true}})
+					.then(function (res) {
+						bot.onReplyToMessage(msg.chat.id, res.message_id, function (pass) {
+							const options = {
+								method: 'POST',
+								url: 'https://lostfilm.tv/ajaxik.php',
+								formData: {
+									act: 'users',
+									type: 'login',
+									mail: login.text,
+									pass: pass.text,
+									rem: '1'
+								}
+							};
 
-	request(options, function (err, res, body) {
-		if (err) throw new Error(err);
+							request(options, function (err, res, body) {
+								if (err) throw new Error(err);
 
-		body = JSON.parse(body);
-		console.log(body);
+								body = JSON.parse(body);
+								console.log(body);
 
-		if (body.success && body.success === true)
-			r.db('lostfilm').table('users')
-				.insert({
-					id: msg.from.id,
-					cookie: res.headers['set-cookie'][res.headers['set-cookie'].length - 1]
-				}, {conflict: 'update'})
+								if (body.success && body.success === true)
+									r.db('lostfilm').table('users')
+										.insert({
+											id: msg.from.id,
+											cookie: res.headers['set-cookie'][res.headers['set-cookie'].length - 1]
+										}, {conflict: 'update'})
 
-				.then(function (status) {
-					console.log(status);
-					bot.sendMessage(msg.chat.id, 'Авторизовано!')
-				})
+										.then(function (status) {
+											console.log(status);
+											bot.sendMessage(msg.chat.id, 'Авторизовано!', keyboard)
+										})
 
-				.catch(function (error) {
-					console.warn(error.message);
-				});
-		else
-			bot.sendMessage(msg.chat.id, 'Что-то пошло не так.')
-	})
+										.catch(function (error) {
+											console.warn(error.message);
+										});
+								else
+									bot.sendMessage(msg.chat.id, 'Что-то пошло не так.', keyboard)
+							});
+						});
+					});
+			})
+		})
 });
 
 // Загружает нужные нам торрент-файлы и пакует их в ZIP для отправки адресату.
@@ -142,14 +163,16 @@ bot.onText(/^\/dl_(\d+)_(\d+)_(\d+)|^\/dl_(\d+)_(\d+)/, function (msg, match) {
 					if (err) console.warn(err.message);
 
 					let $ = cheerio.load(body);
-					if ($('body > a').is('a'))
-						request($('body > a').attr('href'), function (err, res, body) {
+					let link = $('body > a');
+					if (link.is('a'))
+						request(link.attr('href'), function (err, res, body) {
 							if (err) console.warn(err.message);
 
 							$ = cheerio.load(body);
-							if ($('.inner-box--item').is('.inner-box--item')) {
+							let item = $('.inner-box--item');
+							if (item.is('.inner-box--item')) {
 								let file = [];
-								$('.inner-box--item')
+								item
 									.each(function (i) {
 										file[i] = {
 											quality: $(this).children('.inner-box--label').text().trim(),
@@ -318,7 +341,7 @@ bot.onText(/^\/fav_(\d+)/, function (msg, match) {
 
 // Сервисная команда для обновления всех существующих сериалов в базе.
 // По идее нужно автоматизировать её выполнение.
-bot.onText(/^\/update/, async function (msg) {
+bot.onText(/^\/update/, async function () {
 	let flag = true;
 	let cycle = 0;
 	do {
@@ -390,20 +413,11 @@ bot.onText(/^\/search|🔍Поиск/, function (msg) {
 					.then(function (serials) {
 						let text = `Найдено: <b>${serials.length} совп.</b>\n\n`;
 						for (let i in serials) {
-							text += `${serials[i].title} (${serials[i].title_orig})\n/full_${serials[i].id} /fav_${serials[i].id}\n`;
+							if (serials.hasOwnProperty(i))
+								text += `${serials[i].title} (${serials[i].title_orig})\n/about_${serials[i].id} /full_${serials[i].id} /fav_${serials[i].id}\n\n`;
 						}
 
-						bot.sendMessage(res.chat.id, text,
-							{
-								parse_mode: 'HTML',
-								reply_markup: {
-									keyboard: [
-										[{text: 'Список сериалов'}],
-										[{text: 'Избранное'}],
-										[{text: '🔍Поиск'}]
-									]
-								}
-							});
+						bot.sendMessage(res.chat.id, text, keyboard);
 					})
 
 					.catch(function (error) {

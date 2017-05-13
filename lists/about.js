@@ -9,7 +9,7 @@ module.exports = {
 				.get(data.s)
 
 				.then(function (res) {
-					resolve(Math.ceil(res.description.length / 2048));
+					resolve(Math.ceil(res.description.length / 1024));
 				})
 
 				.catch(function (error) {
@@ -25,8 +25,8 @@ module.exports = {
 				.get(data.s)
 
 				.then(function (res) {
-					const temp = (data.p - 1) * 2048;
-					resolve(res.description.slice(temp, temp + 2048));
+					const temp = (data.p - 1) * 1024;
+					resolve(res.description.slice(temp, temp + 1024));
 				})
 
 				.catch(function (error) {

@@ -82,7 +82,7 @@ module.exports = function () {
 		});
 	}
 
-	setInterval(fetch, 300000);
+	setInterval(fetch, 1000 * 60 * 3);
 
 	r.db('lostfilm').table('feed').changes()
 		.then(function (cursor) {
@@ -101,11 +101,13 @@ module.exports = function () {
 
 						.then(async function (res) {
 							for (let i in res) {
-								const serial = R.find(R.propEq('id', id))(res[i].favorites);
-								const text = '<b>' + serial.title + '</b>\n' +
-									'Вышла ' + row.new_val.episode + ' серия ' + row.new_val.season + ' сезона.\n' +
-									'Загрузить: /dl_' +	id + '_' + row.new_val.season + '_' + row.new_val.episode;
-								console.log(await bot.sendMessage(res[i].id, text, parse_html));
+								if (res.hasOwnProperty(i)) {
+									const serial = R.find(R.propEq('id', id))(res[i].favorites);
+									const text = '<b>' + serial.title + '</b>\n' +
+										'Вышла ' + row.new_val.episode + ' серия ' + row.new_val.season + ' сезона.\n' +
+										'Загрузить: /dl_' +	id + '_' + row.new_val.season + '_' + row.new_val.episode;
+									console.log(await bot.sendMessage(res[i].id, text, parse_html));
+								}
 							}
 						})
 

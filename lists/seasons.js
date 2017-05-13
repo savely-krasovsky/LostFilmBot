@@ -82,7 +82,7 @@ module.exports = {
 									mw_episode = `/mw_${id}_${season}_${episode}`;
 								}
 
-								text += `${num}: ${name}\n${dl_episode} ${mw_episode}\n`;
+								text += `${num}: ${name}\n${dl_episode} ${mw_episode}\n\n`;
 							});
 
 						resolve(text);

@@ -190,7 +190,10 @@ module.exports = function () {
 
 							temp.mp = await About.getPageCount(temp);
 
-							bot.sendMessage(msg.chat.id, await About.getPage(temp), getPagination(temp));
+							bot.sendPhoto(msg.chat.id, `http:${serial.img}`)
+								.then(async function () {
+									bot.sendMessage(msg.chat.id, await About.getPage(temp), getPagination(temp));
+								});
 						})
 
 						.catch(function (error) {
