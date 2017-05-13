@@ -3,7 +3,7 @@
  */
 module.exports = {
 	// Считает кол-во страниц для общего /list
-	 getPageCount: function() {
+	getPageCount: function() {
 		return new Promise(function (resolve, reject) {
 			r.db('lostfilm').table('serials').count()
 				.then(function (res) {
@@ -20,11 +20,11 @@ module.exports = {
 	getPage: function(data) {
 		return new Promise(function (resolve, reject) {
 			const temp = data.p * 20;
-			r.db('lostfilm').table('serials').orderBy(r.asc('title')).slice(temp - 20, temp)
+			r.db('lostfilm').table('serials').orderBy(r.desc('id')).slice(temp - 20, temp)
 				.then(function (res) {
 					let text = '<b>Список сериалов:</b>\n\n';
 					for (let i in res) {
-						text += `${res[i].title} (${res[i].title_orig})\n/full_${res[i].id} /fav_${res[i].id}\n`;
+						text += `${res[i].title} (${res[i].title_orig})\n/about_${res[i].id} /full_${res[i].id} /fav_${res[i].id}\n`;
 					}
 					resolve(text);
 				})

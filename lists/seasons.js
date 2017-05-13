@@ -36,7 +36,7 @@ module.exports = {
 
 						const $ = cheerio.load(body);
 						const ctx = `.series-block > div:nth-child(${data.p})`;
-						let text = `<b>${serial.title} (${serial.title_orig})</b>\n`;
+						let text = `<b>${serial.title} (${serial.title_orig})</b>\n/about_${serial.id}\n`;
 
 						text += `\n<b>${$('h2', ctx).text()}</b>\n`;
 

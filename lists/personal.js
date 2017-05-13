@@ -25,7 +25,7 @@ module.exports = {
 					let text = '<b>Список сериалов:</b>\n\n';
 					if (res.length !== 0)
 						for (let i in res) {
-							text += `${res[i].title} (${res[i].title_orig})\n/full_${res[i].id} /fav_${res[i].id}\n`;
+							text += `${res[i].title} (${res[i].title_orig})\n/about_${res[i].id} /full_${res[i].id} /fav_${res[i].id}\n`;
 						}
 					else
 						text += 'Избранные сериалы отсутствуют! Добавьте интересующие, ' +

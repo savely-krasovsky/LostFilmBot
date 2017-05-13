@@ -4,6 +4,7 @@
 const Main = require('./lists/main');
 const Personal = require('./lists/personal');
 const Seasons = require('./lists/seasons');
+const About = require('./lists/about');
 
 module.exports = function () {
 	// Создает кнопочную inline-навигацию
@@ -156,6 +157,53 @@ module.exports = function () {
 		bot.sendMessage(msg.chat.id, await Seasons.getPage(temp), getPagination(temp));
 	});
 
+	bot.onText(/^\/about_(.+)/, function (msg, match) {
+		r.db('lostfilm').table('serials')
+			.get(parseInt(match[1]))
+
+			.then(function (serial) {
+				request(`https://www.lostfilm.tv${serial.link}/`, function (err, res, body) {
+					if (err) console.warn(err.message);
+
+					let text = '<b>' + serial.title + '</b> (' + serial.title_orig + ')\n\n' +
+						'<b>Год выпуска:</b> ' + serial.date + '\n' +
+						'<b>Канал:</b> ' + serial.channels + '\n' +
+						'<b>Рейтинг:</b> ' + serial.rating + '\n' +
+						'<b>Жанр:</b> ' + serial.genres + '\n';
+
+					const $ = cheerio.load(body);
+					text += $('.text-block.description > .body').text();
+
+					r.db('lostfilm').table('serials').get(parseInt(match[1]))
+						.update({
+							description: text
+						})
+
+						.then(async function (res) {
+							console.log(res);
+							const serialId = parseInt(match[1]);
+							const temp = {
+								p: 1,
+								t: 'about',
+								s: serialId
+							};
+
+							temp.mp = await About.getPageCount(temp);
+
+							bot.sendMessage(msg.chat.id, await About.getPage(temp), getPagination(temp));
+						})
+
+						.catch(function (error) {
+							console.warn(error.message);
+						});
+				});
+			})
+
+			.catch(function (error) {
+				console.warn(error.message);
+			});
+	});
+
 	// Обрабатывает перемещение по страницам
 	bot.on('callback_query', async function (message) {
 		const msg = message.message;
@@ -195,6 +243,19 @@ module.exports = function () {
 				s: data.s
 			};
 			text = await Seasons.getPage(temp);
+			editOptions = Object.assign({},
+				getPagination(temp),
+				{chat_id: msg.chat.id, message_id: msg.message_id, parse_mode: 'HTML'});
+		}
+
+		if (data.t === 'about') {
+			const temp = {
+				p: data.p,
+				mp: await About.getPageCount(data),
+				t: data.t,
+				s: data.s
+			};
+			text = await About.getPage(temp);
 			editOptions = Object.assign({},
 				getPagination(temp),
 				{chat_id: msg.chat.id, message_id: msg.message_id, parse_mode: 'HTML'});

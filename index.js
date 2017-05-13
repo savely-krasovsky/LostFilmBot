@@ -377,7 +377,7 @@ bot.onText(/^\/search|🔍Поиск/, function (msg) {
 	}
 
 
-	bot.sendMessage(msg.chat.id, 'Введите полное название (или часть) сериала.',
+	bot.sendMessage(msg.chat.id, 'Введите часть или полное название сериала на любом языке.',
 		{reply_markup: {force_reply: true}})
 
 		.then(function (res) {
@@ -387,7 +387,6 @@ bot.onText(/^\/search|🔍Поиск/, function (msg) {
 					dbRequest('latin', res.text),
 					dbRequest('cyrillic', res.text)
 				)
-
 					.then(function (serials) {
 						let text = `Найдено: <b>${serials.length} совп.</b>\n\n`;
 						for (let i in serials) {
