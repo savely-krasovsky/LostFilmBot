@@ -26,7 +26,7 @@ Of course you will should to get token from [@BotFather](https://t.me/BotFather)
 - [x] Personal list synced with site favorites
 - [x] Ability to mark as watched
 - [x] Downloading as ZIP all torrents for different quality
-- [ ] Personal notifications about new series
+- [x] Personal notifications about new series
 - [ ] Localization on other languages
 - [ ] *Suggest other features!*
 
