@@ -101,7 +101,8 @@ module.exports = function () {
 								if (err) reject(err);
 
 								body = JSON.parse(body);
-								if (body.data.length < 10)
+
+								if (body.no_fav === true || body.data === undefined || body.data.length < 10)
 									flag = false;
 
 								body = fixId(body);

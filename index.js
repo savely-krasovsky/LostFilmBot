@@ -22,8 +22,9 @@ global.r = require('rethinkdbdash')();
 // Либа по типу Underscore для функционального программирования
 global.R = require('ramda');
 
-// Подгружаем модуль
+// Подгружаем модули
 require('./list')();
+require('./push')();
 
 // Конвертирует ID из string в int для правильной сортировки в БД
 global.fixId = function fixId(body) {
