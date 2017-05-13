@@ -42,7 +42,7 @@ module.exports = function () {
 	}
 
 	// Отображает первую страницу /list по алфавиту
-	bot.onText(/^\/list/, async function (msg) {
+	bot.onText(/^\/list|^Список сериалов/, async function (msg) {
 		const temp = {
 			p: 1,
 			t: 'public',
@@ -54,7 +54,7 @@ module.exports = function () {
 	});
 
 	// ОБНОВЛЯЕТ ВЕСЬ и отображает первую страницу личного /mylist
-	bot.onText(/^\/mylist/, async function (msg) {
+	bot.onText(/^\/mylist|^Избранное/, async function (msg) {
 		r.db('lostfilm').table('users')
 			.get(msg.from.id)
 

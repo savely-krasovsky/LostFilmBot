@@ -7,6 +7,8 @@ module.exports = function () {
 	function fetch() {
 		const feedparser = new FeedParser();
 
+		// Загружаем RSS-файл
+		console.log('RSS downloading started...');
 		request
 			.get('http://retre.org/rssdd.xml')
 			.on('error', function(err) {
@@ -14,24 +16,39 @@ module.exports = function () {
 			})
 			.pipe(feedparser);
 
+		// На всякий случай обрабатываем возможную ошибку парсинга
 		feedparser.on('error', function (error) {
-			console.warn(error);
+			console.warn(error.message);
 		});
 
-		feedparser.on('readable', function () {
-			const stream = this;
-			let item;
+		// После парсинга RSS отобразим сообщение в лог
+		feedparser.on('end', function () {
+			console.log('RSS successfully parsed!');
+		});
 
-			while (item = stream.read()) {
+		// Читаем RSS блоками сверху вниз
+		feedparser.on('readable', function () {
+			let item;
+			while (item = feedparser.read()) {
 				if (item.categories[0] === '[MP4]') {
+					// Создаем временную переменную, потому что item может успеть
+					// сменится за время асинхронного запроса в базу данных
 					const temp = item;
+
+					// Используя регулярки сохраняем из RSS название на английском,
+					// а также номер сезона и серии
 					const title = /\((.+)\)\./.exec(temp.title)[1];
 					const num = /\(S(\d+)E(\d+)\)/.exec(temp.title);
 
+					// Делаем запрос в базу с фильтром по названию,
+					// чтобы узнать ID фильма. Узкое место:
+					// Мы предполагаем, что фильм с таким название только ОДИН
 					r.db('lostfilm').table('serials')
 						.filter({'title_orig': title})
 
 						.then(function (res) {
+							// Если пусто -- ничего не делаем.
+							// Скорее всего нужно обновить базу фильмов
 							if (res !== null) {
 								const series = {
 									title: title,
@@ -40,6 +57,7 @@ module.exports = function () {
 									id: res[0].id,
 									date: temp.date
 								};
+
 								r.db('lostfilm').table('feed')
 									.insert(series)
 
@@ -64,7 +82,7 @@ module.exports = function () {
 		});
 	}
 
-	setInterval(fetch, 6000);
+	setInterval(fetch, 300000);
 
 	r.db('lostfilm').table('feed').changes()
 		.then(function (cursor) {
@@ -84,10 +102,10 @@ module.exports = function () {
 						.then(async function (res) {
 							for (let i in res) {
 								const serial = R.find(R.propEq('id', id))(res[i].favorites);
-								const text = 'Вышла ' + row.new_val.episode + ' серия ' + row.new_val.season + ' сезона, ' +
-									'отслеживаемого вами сериала <b>' + serial.title + '</b>. Загрузить: /dl_' +
-									id + '_' + row.new_val.season + '_' + row.new_val.episode;
-								await bot.sendMessage(res[i].id, text, parse_html);
+								const text = '<b>' + serial.title + '</b>\n' +
+									'Вышла ' + row.new_val.episode + ' серия ' + row.new_val.season + ' сезона.\n' +
+									'Загрузить: /dl_' +	id + '_' + row.new_val.season + '_' + row.new_val.episode;
+								console.log(await bot.sendMessage(res[i].id, text, parse_html));
 							}
 						})
 

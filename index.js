@@ -54,7 +54,16 @@ global.fixId = function fixId(body) {
 };
 
 bot.onText(/^\/start/, function (msg) {
-	bot.sendMessage(msg.chat.id, 'Жми /help, чтобы узнать базовые команды.');
+	bot.sendMessage(msg.chat.id, 'Жми /help, чтобы узнать базовые команды.',
+		{
+			reply_markup: {
+				keyboard: [
+					[{text: 'Список сериалов'}],
+					[{text: 'Избранное'}],
+					[{text: '🔍Поиск'}]
+				]
+			}
+		});
 });
 
 bot.onText(/^\/help/, function (msg) {
@@ -352,6 +361,61 @@ bot.onText(/^\/update/, async function (msg) {
 
 		console.log(await part);
 	} while (flag);
+});
+
+bot.onText(/^\/search|🔍Поиск/, function (msg) {
+	function dbRequest(type, text) {
+		if (type === 'cyrillic')
+			type = 'title';
+		else if (type === 'latin')
+			type = 'title_orig';
+
+		return r.db('lostfilm').table('serials').orderBy(type)
+			.filter(function (serials) {
+				return serials(type).match('(?i)' + text);
+			}).limit(20);
+	}
+
+
+	bot.sendMessage(msg.chat.id, 'Введите полное название (или часть) сериала.',
+		{reply_markup: {force_reply: true}})
+
+		.then(function (res) {
+			bot.onReplyToMessage(res.chat.id, res.message_id, function (res) {
+				r.branch(
+					r.expr(res.text).match("\\p{Latin}+").ne(null),
+					dbRequest('latin', res.text),
+					dbRequest('cyrillic', res.text)
+				)
+
+					.then(function (serials) {
+						let text = `Найдено: <b>${serials.length} совп.</b>\n\n`;
+						for (let i in serials) {
+							text += `${serials[i].title} (${serials[i].title_orig})\n/full_${serials[i].id} /fav_${serials[i].id}\n`;
+						}
+
+						bot.sendMessage(res.chat.id, text,
+							{
+								parse_mode: 'HTML',
+								reply_markup: {
+									keyboard: [
+										[{text: 'Список сериалов'}],
+										[{text: 'Избранное'}],
+										[{text: '🔍Поиск'}]
+									]
+								}
+							});
+					})
+
+					.catch(function (error) {
+						console.warn(error.message);
+					})
+			});
+		})
+
+		.catch(function (error) {
+			console.warn(error.message);
+		})
 });
 
 // Логирование всех взаимодействий с ботом.
