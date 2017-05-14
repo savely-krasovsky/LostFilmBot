@@ -135,7 +135,7 @@ module.exports = function () {
 
 					bot.sendMessage(msg.chat.id, await Personal.getPage(temp, msg.from.id), getPagination(temp))
 				} else
-					bot.sendMessage(msg.chat.id, 'Авторизуйтесь! /help');
+					bot.sendMessage(msg.chat.id, 'Авторизуйтесь! /login');
 			})
 
 			.catch(function (error) {

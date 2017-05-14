@@ -20,7 +20,7 @@ module.exports = {
 	getPage: function (data, from_id) {
 		return new Promise(function (resolve, reject) {
 			const temp = data.p * 10;
-			r.db('lostfilm').table('users').get(from_id)('favorites').orderBy(r.desc('id')).slice(temp - 10, temp)
+			r.db('lostfilm').table('users').get(from_id)('favorites').orderBy(r.asc('title')).slice(temp - 10, temp)
 				.then(function (res) {
 					let text = '<b>Список сериалов:</b>\n\n';
 					if (res.length !== 0)

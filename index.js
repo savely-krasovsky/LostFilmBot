@@ -18,7 +18,7 @@ const keyboard = {
 		keyboard: [
 			[{text: 'Список сериалов'}],
 			[{text: 'Избранное'}],
-			[{text: '🔍Поиск'}]
+			[{text: '🔍Поиск'}, {text: 'ℹ️Помощь'}]
 		]
 	}
 };
@@ -68,18 +68,21 @@ bot.onText(/^\/start/, function (msg) {
 	bot.sendMessage(msg.chat.id, 'Жми /help, чтобы узнать базовые команды.', keyboard);
 });
 
-bot.onText(/^\/help/, function (msg) {
+bot.onText(/^\/help|^ℹ️Помощь/, function (msg) {
 	bot.sendMessage(msg.chat.id,
+		'<b>Самостоятельные команды:</b>\n' +
 		'/start - Если пропала удобная клавиатура ¯\\_(ツ)_/¯\n' +
 		'/login - Авторизация\n' +
-		'/list - Список сериалов по дате выхода\n' +
-		'/mylist - Список избранных сериалов по дате выхода\n' +
+		'/list - Список сериалов по алфавиту\n' +
+		'/mylist - Список избранных сериалов по алфавиту\n' +
 		'/search - Поиск среди всех озвученных сериалов\n\n' +
-		'<code>/about_</code> - Описание сериала\n' +
-		'<code>/full_</code> - Все сезоны и серии сериала\n' +
-		'<code>/fav_</code> - Добавить/Удалить сериал из Избранного\n' +
-		'<code>/dl_</code> - Загрузить серию/сезон\n' +
-		'<code>/mw_</code> - Отметить серию/сезон (не)просмотренной\n\n' +
+		'<b>Работают только с кодом:</b>\n' +
+		'<code>/about</code> - Описание сериала\n' +
+		'<code>/full</code> - Все сезоны и серии сериала\n' +
+		'<code>/fav</code> - Добавить/Удалить сериал из Избранного\n' +
+		'<code>/dl</code> - Загрузить серию/сезон\n' +
+		'<code>/mark</code> - Отметить серию/сезон (не)просмотренной\n\n' +
+		'<b>Примечание:</b>\n' +
 		'Ограничения Telegram не позволяют передавать напрямую torrent-файлы, ' +
 		'поэтому все три типа качества упакованы в один ZIP-архив.', parse_html);
 });
@@ -152,6 +155,9 @@ bot.onText(/^\/dl_(\d+)_(\d+)_(\d+)|^\/dl_(\d+)_(\d+)/, function (msg, match) {
 				const url = 'https://www.lostfilm.tv';
 				j.setCookie(cookie, url);
 
+				// Делаем запрос в некую поисковую систему LostFilm
+				// которая принимает три параметра: c, s, e (сериал, сезон, эпизод)
+				// и отправляет в ответ запрос на переадресацию
 				const options = {
 					method: 'GET',
 					url: 'https://lostfilm.tv/v_search.php',
@@ -162,15 +168,21 @@ bot.onText(/^\/dl_(\d+)_(\d+)_(\d+)|^\/dl_(\d+)_(\d+)/, function (msg, match) {
 				request(options, function (err, res, body) {
 					if (err) console.warn(err.message);
 
+					// Получаем ту самую ссылку на переадресацию
 					let $ = cheerio.load(body);
 					let link = $('body > a');
+
+					// На всякий случай проверяем
 					if (link.is('a'))
+						// Делаем новый запрос по новой ссылке, расположенной на retre.org
 						request(link.attr('href'), function (err, res, body) {
 							if (err) console.warn(err.message);
 
+							// Разбираем страницу с тремя торрентами
 							$ = cheerio.load(body);
 							let item = $('.inner-box--item');
 							if (item.is('.inner-box--item')) {
+								// Создаем массив file, содержащий три объекта с качеством и ссылкой на загрузку
 								let file = [];
 								item
 									.each(function (i) {
@@ -180,22 +192,28 @@ bot.onText(/^\/dl_(\d+)_(\d+)_(\d+)|^\/dl_(\d+)_(\d+)/, function (msg, match) {
 										};
 									});
 
+								// Создаем архив ZIP
 								let archive = archiver('zip', {
 									zlib: { level: 9 }
 								});
 
+								// Добавляем стримы ещё НЕ загруженных торрентов в архив
 								for (let i in file) {
 									const stream = request.get(file[i].link);
 									archive.append(stream, {name: file[i].quality + '.torrent'})
 								}
 
+								// Завершаем компоновку архива
 								archive.finalize();
 
+								// Создаем временный массив temp для будущего Buffer
 								let temp = [];
 								archive.on('data', function (chunk) {
+									// Стримим содержимое архива пачками chunk в temp
 									temp.push(chunk);
 								});
 
+								// По завершению стрима собираем Buffer
 								archive.on('end', function () {
 									const buffer = Buffer.concat(temp);
 									console.log(buffer);
@@ -204,6 +222,7 @@ bot.onText(/^\/dl_(\d+)_(\d+)_(\d+)|^\/dl_(\d+)_(\d+)/, function (msg, match) {
 										.get(parseInt(match[1] || match[4]))
 
 										.then(function (res) {
+											// Собираем название архива и отправляем Buffer Телеграму
 											const fileName = `${res.alias}_s${match[2] || match[5]}e${match[3]|| 'All'}.zip`;
 											bot.sendDocument(msg.chat.id, buffer, {}, fileName);
 										})
@@ -215,6 +234,8 @@ bot.onText(/^\/dl_(\d+)_(\d+)_(\d+)|^\/dl_(\d+)_(\d+)/, function (msg, match) {
 							} else
 								bot.sendMessage(msg.chat.id, 'Указана неверная серия или сезон.');
 
+							// В перспективе нам может понадобиться usess-код, расположенный внизу
+							// любой страницы retre.org, поэтому парсим и сохраняем в базу "на всякий"
 							const usess = /- (.+) ;/.exec($('.footer-banner.left > a').attr('title'))[1];
 							r.db('lostfilm').table('users')
 								.insert({
@@ -234,7 +255,7 @@ bot.onText(/^\/dl_(\d+)_(\d+)_(\d+)|^\/dl_(\d+)_(\d+)/, function (msg, match) {
 						bot.sendMessage(msg.chat.id, 'Возможно, вы сменили пароль или аннулировали сессию.')
 				})
 			} else
-				bot.sendMessage(msg.chat.id, 'Авторизуйтесь! /help');
+				bot.sendMessage(msg.chat.id, 'Авторизуйтесь! /login');
 		})
 
 		.catch(function (error) {
@@ -243,7 +264,7 @@ bot.onText(/^\/dl_(\d+)_(\d+)_(\d+)|^\/dl_(\d+)_(\d+)/, function (msg, match) {
 });
 
 // Отмечает серию или сезон, как Просмотренный (или наоборот) через API Lostfilm.
-bot.onText(/^\/mw_(\d+)_(\d+)_(\d+)|^\/mw_(\d+)_(\d+)/, function (msg, match) {
+bot.onText(/^\/mark_(\d+)_(\d+)_(\d+)|^\/mark_(\d+)_(\d+)/, function (msg, match) {
 	let formData;
 	if (match[3] !== undefined)
 		formData = {
@@ -288,7 +309,7 @@ bot.onText(/^\/mw_(\d+)_(\d+)_(\d+)|^\/mw_(\d+)_(\d+)/, function (msg, match) {
 				});
 			}
 			else
-				bot.sendMessage(msg.chat.id, 'Авторизуйтесь! /help');
+				bot.sendMessage(msg.chat.id, 'Авторизуйтесь! /login');
 		})
 
 		.catch(function (error) {
@@ -331,7 +352,7 @@ bot.onText(/^\/fav_(\d+)/, function (msg, match) {
 						bot.sendMessage(msg.chat.id, 'Сериал удален из избранного!')
 				});
 			} else
-				bot.sendMessage(msg.chat.id, 'Авторизуйтесь! /help');
+				bot.sendMessage(msg.chat.id, 'Авторизуйтесь! /login');
 		})
 
 		.catch(function (error) {
@@ -396,7 +417,7 @@ bot.onText(/^\/search|🔍Поиск/, function (msg) {
 		return r.db('lostfilm').table('serials').orderBy(type)
 			.filter(function (serials) {
 				return serials(type).match('(?i)' + text);
-			}).limit(20);
+			}).limit(10);
 	}
 
 

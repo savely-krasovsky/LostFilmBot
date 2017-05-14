@@ -41,7 +41,7 @@ module.exports = {
 						text += `\n<b>${$('h2', ctx).text()}</b>\n`;
 
 						let dl_season = '<i>Ещё не вышел</i>';
-						let mw_season = '';
+						let mark_season = '';
 
 						const temp = $('.movie-details-block > .external-btn', ctx).attr('onclick');
 						if (temp !== undefined) {
@@ -51,11 +51,11 @@ module.exports = {
 
 							if (id !== null) {
 								dl_season = `/dl_${id}_${season}`;
-								mw_season = `/mw_${id}_${season}`;
+								mark_season = `/mark_${id}_${season}`;
 							}
 						}
 
-						text += `${dl_season} ${mw_season}\n\n`;
+						text += `${dl_season} ${mark_season}\n\n`;
 						$('tr', ctx)
 							.each(function () {
 								const num = $(this).children('.beta').text();
@@ -75,14 +75,14 @@ module.exports = {
 								const episode = re.exec(temp);
 
 								let dl_episode = '<i>Ещё не вышла</i>';
-								let mw_episode = '';
+								let mark_episode = '';
 
 								if (id !== null) {
 									dl_episode = `/dl_${id}_${season}_${episode}`;
-									mw_episode = `/mw_${id}_${season}_${episode}`;
+									mark_episode = `/mark_${id}_${season}_${episode}`;
 								}
 
-								text += `${num}: ${name}\n${dl_episode} ${mw_episode}\n\n`;
+								text += `${num}: ${name}\n${dl_episode} ${mark_episode}\n\n`;
 							});
 
 						resolve(text);
