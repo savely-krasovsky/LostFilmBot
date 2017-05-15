@@ -5,7 +5,9 @@ module.exports = {
 	// Считает кол-во страниц для личного /mylist
 	getPageCount: function (from_id) {
 		return new Promise(function (resolve, reject) {
-			r.db('lostfilm').table('users').get(from_id)('favorites').count()
+			r.db('lostfilm').table('users')
+				.get(from_id)('favorites').count()
+
 				.then(function (res) {
 					resolve(Math.ceil(res / 10));
 				})
@@ -20,9 +22,14 @@ module.exports = {
 	getPage: function (data, from_id) {
 		return new Promise(function (resolve, reject) {
 			const temp = data.p * 10;
-			r.db('lostfilm').table('users').get(from_id)('favorites').orderBy(r.asc('title')).slice(temp - 10, temp)
+			r.db('lostfilm').table('users')
+				.get(from_id)('favorites')
+				.orderBy(r.asc('title'))
+				.slice(temp - 10, temp)
+
 				.then(function (res) {
 					let text = '<b>Список сериалов:</b>\n\n';
+
 					if (res.length !== 0)
 						for (let i in res) {
 							if (res.hasOwnProperty(i))
@@ -31,6 +38,7 @@ module.exports = {
 					else
 						text += 'Избранные сериалы отсутствуют! Добавьте интересующие, ' +
 							'нажав команду <code>/fav_xxx</code> возле названия сериала в общем /list!';
+
 					resolve(text);
 				})
 

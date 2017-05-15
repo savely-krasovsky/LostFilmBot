@@ -131,8 +131,10 @@ module.exports = function () {
 					temp.mp = await Personal.getPageCount(msg.from.id);
 
 					bot.sendMessage(msg.chat.id, await Personal.getPage(temp, msg.from.id), getPagination(temp))
-				} else
+				} else {
 					bot.sendMessage(msg.chat.id, 'Авторизуйтесь! /login');
+					throw new Error('[/mylist] User not authorized!');
+				}
 			})
 
 			.catch(function (error) {

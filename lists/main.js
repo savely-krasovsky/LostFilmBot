@@ -20,7 +20,10 @@ module.exports = {
 	getPage: function(data) {
 		return new Promise(function (resolve, reject) {
 			const temp = data.p * 10;
-			r.db('lostfilm').table('serials').orderBy(r.asc('title')).slice(temp - 10, temp)
+			r.db('lostfilm').table('serials')
+				.orderBy(r.asc('title'))
+				.slice(temp - 10, temp)
+
 				.then(function (res) {
 					let text = '<b>Список сериалов:</b>\n\n';
 					for (let i in res) {

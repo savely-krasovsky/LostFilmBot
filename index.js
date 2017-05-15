@@ -16,8 +16,8 @@ const keyboard = {
 	parse_mode: 'HTML',
 	reply_markup: {
 		keyboard: [
-			[{text: 'Список сериалов'}],
-			[{text: 'Избранное'}],
+			[{text: 'Список сериалов'}, {text: 'Избранное'}],
+			[{text: 'Расписание'}, {text: 'Моё расписание'}],
 			[{text: '🔍Поиск'}, {text: 'ℹ️Помощь'}]
 		]
 	}
@@ -72,12 +72,14 @@ bot.onText(/^\/start/, function (msg) {
 
 bot.onText(/^\/help|^ℹ️Помощь/, function (msg) {
 	bot.sendMessage(msg.chat.id,
-		'<b>LostFilm.TV Bot 1.0β</b> by @kraso\n\n' +
+		'<b>LostFilm.TV Bot 1.1β</b> by @kraso\n\n' +
 		'<b>Самостоятельные команды:</b>\n' +
 		'/start - Если пропала удобная клавиатура ¯\\_(ツ)_/¯\n' +
 		'/login - Авторизация\n' +
 		'/list - Список сериалов по алфавиту\n' +
-		'/mylist - Список избранных сериалов по алфавиту\n' +
+		'/mylist - Список избранных сериалов\n' +
+		'/schedule - Расписание выхода новых серий\n' +
+		'/myschedule - Расписание выхода избранных\n' +
 		'/search - Поиск среди всех озвученных сериалов\n\n' +
 		'<b>Работают только с кодом:</b>\n' +
 		'<code>/about</code> - Описание сериала\n' +
@@ -92,7 +94,7 @@ bot.onText(/^\/help|^ℹ️Помощь/, function (msg) {
 
 // Логинит нас и сохраняет куку в базу данных.
 bot.onText(/^\/login/, function (msg) {
-	bot.sendMessage(msg.chat.id, 'Введите логин:', {reply_markup: {force_reply: true}})
+	bot.sendMessage(msg.chat.id, 'Введите электронную почту:', {reply_markup: {force_reply: true}})
 		.then(function (res) {
 			return new Promise(function (resolve) {
 				bot.onReplyToMessage(msg.chat.id, res.message_id, function (login) {
@@ -180,8 +182,10 @@ bot.onText(/^\/dl_(\d+)_(\d+)_(\d+)|^\/dl_(\d+)_(\d+)/, function (msg, match) {
 		.then(function (res) {
 			if (res !== null && res.cookie !== undefined) {
 				return res;
-			} else
+			} else {
 				bot.sendMessage(msg.chat.id, 'Авторизуйтесь! /login');
+				throw new Error('[/dl] User not authorized!');
+			}
 		})
 
 		.then(function (res) {
@@ -280,7 +284,7 @@ bot.onText(/^\/dl_(\d+)_(\d+)_(\d+)|^\/dl_(\d+)_(\d+)/, function (msg, match) {
 			});
 
 			archive.on('error', function (error) {
-				reject(error);
+				throw new Error(error);
 			});
 
 			// По завершению стрима собираем Buffer
@@ -305,7 +309,7 @@ bot.onText(/^\/dl_(\d+)_(\d+)_(\d+)|^\/dl_(\d+)_(\d+)/, function (msg, match) {
 		})
 
 		.catch(function (error) {
-			console.warn(error);
+			console.warn(error.message);
 			bot.sendMessage(msg.chat.id, 'Что-то пошло не так...');
 		});
 });
@@ -333,8 +337,10 @@ bot.onText(/^\/mark_(\d+)_(\d+)_(\d+)|^\/mark_(\d+)_(\d+)/, function (msg, match
 			if (res !== null && res.cookie !== undefined) {
 				return res;
 			}
-			else
+			else {
 				bot.sendMessage(msg.chat.id, 'Авторизуйтесь! /login');
+				throw new Error('[/mark] User not authorized!');
+			}
 		})
 
 		.then(function (res) {
@@ -375,8 +381,10 @@ bot.onText(/^\/fav_(\d+)/, function (msg, match) {
 		.then(function (res) {
 			if (res !== null && res.cookie !== undefined) {
 				return res;
-			} else
+			} else {
 				bot.sendMessage(msg.chat.id, 'Авторизуйтесь! /login');
+				throw new Error('[/fav] User not authorized!');
+			}
 		})
 
 		.then(function (res) {
@@ -409,7 +417,7 @@ bot.onText(/^\/fav_(\d+)/, function (msg, match) {
 		})
 
 		.catch(function (error) {
-			console.warn(error);
+			console.warn(error.message);
 			bot.sendMessage(msg.chat.id, 'Что-то пошло не так...');
 		});
 });
@@ -507,6 +515,116 @@ bot.onText(/^\/search|🔍Поиск/, function (msg) {
 			console.warn(error.message);
 			bot.sendMessage(msg.chat.id, 'Что-то пошло не так...', keyboard);
 		});
+});
+
+function parseSchedule($) {
+	const table = $('tbody > tr');
+
+	let result = [];
+	let count = 0;
+	table
+		.each(function (i, elem) {
+			if ($('th', elem).is('th')) {
+				result[count] = [];
+				result[count].push($('th', elem).text());
+				count++;
+			}
+
+			let block = [];
+			if ($('td', elem).is('td')) {
+				const temp = $('td', elem).text().replace(/\t/g, '').replace(/\r/g, '').split('\n');
+				for (let i in temp) {
+					if (temp.hasOwnProperty(i) && temp[i] !== '')
+						block.push(temp[i]);
+				}
+			}
+
+			if (block.length > 0)
+				result[count - 1].push(block);
+		});
+
+	return result;
+}
+
+bot.onText(/^\/schedule|^\/myschedule|^Расписание|^Моё расписание/, function (msg, match) {
+	let base_url = '';
+	if (match[0] === '/myschedule' || match[0] === 'Моё расписание')
+		base_url = 'https://www.lostfilm.tv/schedule/my_1/date_ru';
+	else if (match[0] === '/schedule' || match[0] === 'Расписание')
+		base_url = 'https://www.lostfilm.tv/schedule/my_0/date_ru';
+
+	r.db('lostfilm').table('users')
+		.get(msg.from.id)
+
+		.then(function (res) {
+			if (res !== null && res.cookie !== undefined) {
+				return res;
+			} else {
+				bot.sendMessage(msg.chat.id, 'Авторизуйтесь! /login');
+				throw new Error('[/schedule] User not authorized!');
+			}
+		})
+
+		.then(function (res) {
+			const j = request.jar();
+			const cookie = request.cookie(res.cookie);
+			const url = 'https://www.lostfilm.tv';
+			j.setCookie(cookie, url);
+
+			const options = {
+				url: base_url,
+				jar: j,
+				transform: function (body) {
+					return cheerio.load(body)
+				}
+			};
+
+			return request.get(options);
+		})
+
+		.then(async function ($) {
+			const result = parseSchedule($);
+
+			let text = '';
+			for (let i in result) {
+				if (result.hasOwnProperty(i)) {
+					const caption = result[i][0].replace(/[а-яА-Я0-9]/g, function (letter) {
+						return letter.toUpperCase();
+					});
+
+					text += `\n<b>${caption}</b>\n\n`;
+					for (let j = 1; j < result[i].length; j++) {
+						const temp = {
+							title: result[i][j][0],
+							title_orig: result[i][j][1],
+							num: result[i][j][2],
+							howLong: result[i][j][5],
+							date: result[i][j][4]
+						};
+
+						try {
+							const serial = await r.db('lostfilm').table('serials')
+								.filter({'title_orig': temp.title_orig}).nth(0);
+
+							text += `${temp.title} (${temp.title_orig})\n${temp.num} ${temp.howLong} <i>(${temp.date})</i>\n/about_${serial.id} /full_${serial.id}\n\n`
+						} catch (error) {
+							throw new Error(error);
+						}
+					}
+				}
+			}
+
+			return bot.sendMessage(msg.chat.id, text, parse_html);
+		})
+
+		.then(function (res) {
+			console.log(res);
+		})
+
+		.catch(function (error) {
+			console.warn(error.message);
+			bot.sendMessage(msg.chat.id, 'Что-то пошло не так...');
+		})
 });
 
 // Логирование всех взаимодействий с ботом.

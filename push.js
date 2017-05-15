@@ -58,20 +58,16 @@ module.exports = function () {
 									date: temp.date
 								};
 
-								r.db('lostfilm').table('feed')
-									.insert(series)
-
-									.then(function (res) {
-										if (/Duplicate primary key/.exec(res.first_error))
-											console.log('Nothing new!');
-										else
-											console.log(series);
-									})
-
-									.catch(function (error) {
-										console.warn(error.message);
-									});
+								return r.db('lostfilm').table('feed')
+									.insert(series);
 							}
+						})
+
+						.then(function (res) {
+							if (/Duplicate primary key/.exec(res.first_error))
+								console.log('Nothing new!');
+							else
+								console.log(series);
 						})
 
 						.catch(function (error) {
