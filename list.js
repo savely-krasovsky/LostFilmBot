@@ -83,7 +83,6 @@ module.exports = function () {
 					let cycle = 0;
 					do {
 						const options = {
-							method: 'POST',
 							url: 'https://lostfilm.tv/ajaxik.php',
 							jar: j,
 							formData: {
@@ -92,36 +91,34 @@ module.exports = function () {
 								o: cycle * 10,
 								s: 1,
 								t: 99
-							}
+							},
+							json: true
 						};
 
 						cycle++;
 
 						const part = new Promise(function (resolve, reject) {
-							request(options, function (err, res, body) {
-								if (err) reject(err);
+							request.post(options)
+								.then(function (res) {
+									if (res.no_fav === true || res.data === undefined || res.data.length < 10)
+										flag = false;
 
-								body = JSON.parse(body);
+									res = fixId(res);
 
-								if (body.no_fav === true || body.data === undefined || body.data.length < 10)
-									flag = false;
+									return r.db('lostfilm').table('users').get(msg.from.id)
+										.update({
+											favorites: r.row('favorites').spliceAt(0, res)
+										});
+								})
 
-								body = fixId(body);
+								.then(function (res) {
+									resolve(res);
+								})
 
-								r.db('lostfilm').table('users').get(msg.from.id)
-									.update({
-										favorites: r.row('favorites').spliceAt(0, body)
-									})
-
-									.then(function (res) {
-										resolve(res);
-									})
-
-									.catch(function (error) {
-										reject(error);
-									});
+								.catch(function (error) {
+									reject(error);
+								});
 							});
-						});
 
 						console.log(await part);
 					} while (flag);
@@ -161,45 +158,50 @@ module.exports = function () {
 		r.db('lostfilm').table('serials')
 			.get(parseInt(match[1]))
 
-			.then(function (serial) {
-				request(`https://www.lostfilm.tv${serial.link}/`, function (err, res, body) {
-					if (err) console.warn(err.message);
+			.then(function (res) {
+				const options = {
+					url: `https://www.lostfilm.tv${res.link}/`,
+					transform: function (body) {
+						return cheerio.load(body)
+					}
+				};
+				return Promise.all([res, request.get(options)]);
+			})
 
-					let text = '<b>' + serial.title + '</b> (' + serial.title_orig + ')\n\n' +
-						'<b>Год выпуска:</b> ' + serial.date + '\n' +
-						'<b>Канал:</b> ' + serial.channels + '\n' +
-						'<b>Рейтинг:</b> ' + serial.rating + '\n' +
-						'<b>Жанр:</b> ' + serial.genres + '\n';
+			.then(function (res) {
+				let text = '<b>' + res[0].title + '</b> (' + res[0].title_orig + ')\n\n' +
+					'<b>Год выпуска:</b> ' + res[0].date + '\n' +
+					'<b>Канал:</b> ' + res[0].channels + '\n' +
+					'<b>Рейтинг:</b> ' + res[0].rating + '\n' +
+					'<b>Жанр:</b> ' + res[0].genres + '\n';
 
-					const $ = cheerio.load(body);
-					text += $('.text-block.description > .body').text();
+				const $ = res[1];
+				text += $('.text-block.description > .body').text();
 
-					r.db('lostfilm').table('serials').get(parseInt(match[1]))
-						.update({
-							description: text
-						})
+				r.db('lostfilm').table('serials').get(parseInt(match[1]))
+					.update({
+						description: text
+					})
 
-						.then(async function (res) {
-							console.log(res);
-							const serialId = parseInt(match[1]);
-							const temp = {
-								p: 1,
-								t: 'about',
-								s: serialId
-							};
+					.then(async function () {
+						const serialId = parseInt(match[1]);
+						const temp = {
+							p: 1,
+							t: 'about',
+							s: serialId
+						};
 
-							temp.mp = await About.getPageCount(temp);
+						temp.mp = await About.getPageCount(temp);
 
-							bot.sendPhoto(msg.chat.id, `http:${serial.img}`)
-								.then(async function () {
-									bot.sendMessage(msg.chat.id, await About.getPage(temp), getPagination(temp));
-								});
-						})
+						bot.sendPhoto(msg.chat.id, `http:${res[0].img}`)
+							.then(async function () {
+								bot.sendMessage(msg.chat.id, await About.getPage(temp), getPagination(temp));
+							});
+					})
 
-						.catch(function (error) {
-							console.warn(error.message);
-						});
-				});
+					.catch(function (error) {
+						console.warn(error.message);
+					});
 			})
 
 			.catch(function (error) {

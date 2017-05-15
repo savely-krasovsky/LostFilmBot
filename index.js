@@ -1,7 +1,7 @@
 /**
  * Created by savely on 10.05.2017.
  */
-global.request = require('request');
+global.request = require('request-promise-native');
 // Парсер HTML по типу jQuery
 global.cheerio = require('cheerio');
 // Либа для создания ZIP-архивов
@@ -35,6 +35,8 @@ global.R = require('ramda');
 // Подгружаем модули
 require('./list')();
 require('./push')();
+
+const parseTorrent = require('parse-torrent');
 
 // Конвертирует ID из string в int для правильной сортировки в БД
 global.fixId = function fixId(body) {
@@ -70,6 +72,7 @@ bot.onText(/^\/start/, function (msg) {
 
 bot.onText(/^\/help|^ℹ️Помощь/, function (msg) {
 	bot.sendMessage(msg.chat.id,
+		'<b>LostFilm.TV Bot 1.0β</b> by @kraso\n\n' +
 		'<b>Самостоятельные команды:</b>\n' +
 		'/start - Если пропала удобная клавиатура ¯\\_(ツ)_/¯\n' +
 		'/login - Авторизация\n' +
@@ -91,50 +94,76 @@ bot.onText(/^\/help|^ℹ️Помощь/, function (msg) {
 bot.onText(/^\/login/, function (msg) {
 	bot.sendMessage(msg.chat.id, 'Введите логин:', {reply_markup: {force_reply: true}})
 		.then(function (res) {
-			bot.onReplyToMessage(msg.chat.id, res.message_id, function (login) {
-				bot.sendMessage(msg.chat.id, 'Введите пароль:', {reply_markup: {force_reply: true}})
-					.then(function (res) {
-						bot.onReplyToMessage(msg.chat.id, res.message_id, function (pass) {
-							const options = {
-								method: 'POST',
-								url: 'https://lostfilm.tv/ajaxik.php',
-								formData: {
-									act: 'users',
-									type: 'login',
-									mail: login.text,
-									pass: pass.text,
-									rem: '1'
-								}
-							};
-
-							request(options, function (err, res, body) {
-								if (err) throw new Error(err);
-
-								body = JSON.parse(body);
-								console.log(body);
-
-								if (body.success && body.success === true)
-									r.db('lostfilm').table('users')
-										.insert({
-											id: msg.from.id,
-											cookie: res.headers['set-cookie'][res.headers['set-cookie'].length - 1]
-										}, {conflict: 'update'})
-
-										.then(function (status) {
-											console.log(status);
-											bot.sendMessage(msg.chat.id, 'Авторизовано!', keyboard)
-										})
-
-										.catch(function (error) {
-											console.warn(error.message);
-										});
-								else
-									bot.sendMessage(msg.chat.id, 'Что-то пошло не так.', keyboard)
-							});
-						});
-					});
-			})
+			return new Promise(function (resolve) {
+				bot.onReplyToMessage(msg.chat.id, res.message_id, function (login) {
+					resolve(login.text);
+				});
+			});
 		})
+
+		.then(function (res) {
+			return Promise.all([
+				res,
+				bot.sendMessage(msg.chat.id, 'Введите пароль:', {reply_markup: {force_reply: true}})
+			]);
+		})
+
+		.then(function (res) {
+			return new Promise(function (resolve) {
+				bot.onReplyToMessage(msg.chat.id, res[1].message_id, function (pass) {
+					resolve([res[0], pass.text])
+				});
+			});
+		})
+
+		.then(function (res) {
+			const options = {
+				url: 'https://lostfilm.tv/ajaxik.php',
+				formData: {
+					act: 'users',
+					type: 'login',
+					mail: res[0],
+					pass: res[1],
+					rem: '1'
+				},
+				resolveWithFullResponse: true
+			};
+
+			return request.post(options);
+		})
+
+		.then(function (res) {
+			const body = JSON.parse(res.body);
+			if (res.headers.hasOwnProperty('set-cookie'))
+				return {
+					body: body,
+					// Выделяем нужную нам последнюю (!) куку
+					cookie: res.headers['set-cookie'].slice(-1)[0]
+				};
+			else
+				throw new Error('Incorrect login or password!');
+		})
+
+		.then(function (res) {
+			if (res.body.success && res.body.success === true)
+				return r.db('lostfilm').table('users')
+					.insert({
+						id: msg.from.id,
+						cookie: res.cookie
+					}, {conflict: 'update'});
+			else
+				throw new Error('Lostfilm answered strange response on login attempt!');
+		})
+
+		.then(function (res) {
+			console.log(res);
+			bot.sendMessage(msg.chat.id, 'Авторизовано!', keyboard);
+		})
+
+		.catch(function (error) {
+			console.warn(error.message);
+			bot.sendMessage(msg.chat.id, 'Что-то пошло не так...', keyboard);
+		});
 });
 
 // Загружает нужные нам торрент-файлы и пакует их в ZIP для отправки адресату.
@@ -150,116 +179,134 @@ bot.onText(/^\/dl_(\d+)_(\d+)_(\d+)|^\/dl_(\d+)_(\d+)/, function (msg, match) {
 
 		.then(function (res) {
 			if (res !== null && res.cookie !== undefined) {
-				const j = request.jar();
-				const cookie = request.cookie(res.cookie);
-				const url = 'https://www.lostfilm.tv';
-				j.setCookie(cookie, url);
-
-				// Делаем запрос в некую поисковую систему LostFilm
-				// которая принимает три параметра: c, s, e (сериал, сезон, эпизод)
-				// и отправляет в ответ запрос на переадресацию
-				const options = {
-					method: 'GET',
-					url: 'https://lostfilm.tv/v_search.php',
-					jar: j,
-					qs: qs
-				};
-
-				request(options, function (err, res, body) {
-					if (err) console.warn(err.message);
-
-					// Получаем ту самую ссылку на переадресацию
-					let $ = cheerio.load(body);
-					let link = $('body > a');
-
-					// На всякий случай проверяем
-					if (link.is('a'))
-						// Делаем новый запрос по новой ссылке, расположенной на retre.org
-						request(link.attr('href'), function (err, res, body) {
-							if (err) console.warn(err.message);
-
-							// Разбираем страницу с тремя торрентами
-							$ = cheerio.load(body);
-							let item = $('.inner-box--item');
-							if (item.is('.inner-box--item')) {
-								// Создаем массив file, содержащий три объекта с качеством и ссылкой на загрузку
-								let file = [];
-								item
-									.each(function (i) {
-										file[i] = {
-											quality: $(this).children('.inner-box--label').text().trim(),
-											link: $('.inner-box--link.main > a', this).attr('href')
-										};
-									});
-
-								// Создаем архив ZIP
-								let archive = archiver('zip', {
-									zlib: { level: 9 }
-								});
-
-								// Добавляем стримы ещё НЕ загруженных торрентов в архив
-								for (let i in file) {
-									const stream = request.get(file[i].link);
-									archive.append(stream, {name: file[i].quality + '.torrent'})
-								}
-
-								// Завершаем компоновку архива
-								archive.finalize();
-
-								// Создаем временный массив temp для будущего Buffer
-								let temp = [];
-								archive.on('data', function (chunk) {
-									// Стримим содержимое архива пачками chunk в temp
-									temp.push(chunk);
-								});
-
-								// По завершению стрима собираем Buffer
-								archive.on('end', function () {
-									const buffer = Buffer.concat(temp);
-									console.log(buffer);
-
-									r.db('lostfilm').table('serials')
-										.get(parseInt(match[1] || match[4]))
-
-										.then(function (res) {
-											// Собираем название архива и отправляем Buffer Телеграму
-											const fileName = `${res.alias}_s${match[2] || match[5]}e${match[3]|| 'All'}.zip`;
-											bot.sendDocument(msg.chat.id, buffer, {}, fileName);
-										})
-
-										.catch(function (error) {
-											console.warn(error.message);
-										});
-								});
-							} else
-								bot.sendMessage(msg.chat.id, 'Указана неверная серия или сезон.');
-
-							// В перспективе нам может понадобиться usess-код, расположенный внизу
-							// любой страницы retre.org, поэтому парсим и сохраняем в базу "на всякий"
-							const usess = /- (.+) ;/.exec($('.footer-banner.left > a').attr('title'))[1];
-							r.db('lostfilm').table('users')
-								.insert({
-									id: msg.from.id,
-									usess: usess
-								}, {conflict: 'update'})
-
-								.then(function (status) {
-									console.log(status)
-								})
-
-								.catch(function (error) {
-									console.warn(error.message);
-								});
-						});
-					else
-						bot.sendMessage(msg.chat.id, 'Возможно, вы сменили пароль или аннулировали сессию.')
-				})
+				return res;
 			} else
 				bot.sendMessage(msg.chat.id, 'Авторизуйтесь! /login');
 		})
 
+		.then(function (res) {
+			const j = request.jar();
+			const cookie = request.cookie(res.cookie);
+			const url = 'https://www.lostfilm.tv';
+			j.setCookie(cookie, url);
+
+			// Делаем запрос в некую поисковую систему LostFilm
+			// которая принимает три параметра: c, s, e (сериал, сезон, эпизод)
+			// и отправляет в ответ запрос на переадресацию
+			const options = {
+				url: 'https://lostfilm.tv/v_search.php',
+				jar: j,
+				qs: qs,
+				transform: function (body) {
+					return cheerio.load(body)
+				}
+			};
+
+			return request.get(options);
+		})
+
+		.then(function ($) {
+			const options = {
+				url: $('body > a').attr('href'),
+				transform: function (body) {
+					return cheerio.load(body)
+				}
+			};
+
+			return request.get(options);
+		})
+
+		.then(function ($) {
+			// В перспективе нам может понадобиться usess-код, расположенный внизу
+			// любой страницы retre.org, поэтому парсим и сохраняем в базу "на всякий"
+			const usess = /- (.+) ;/.exec($('.footer-banner.left > a').attr('title'))[1];
+			r.db('lostfilm').table('users')
+				.get(msg.from.id)
+				.update({
+					usess: usess
+				});
+
+			const item = $('.inner-box--item');
+
+			if (item.is('.inner-box--item')) {
+				// Создаем массив file, содержащий три объекта с качеством и ссылкой на загрузку
+				let files = [];
+				item
+					.each(function () {
+						//const quality = $(this).children('.inner-box--label').text().trim();
+						const options = {
+							url: $('.inner-box--link.main > a', this).attr('href'),
+							encoding: null
+						};
+
+						files.push(request.get(options));
+					});
+
+				return Promise.all(files);
+			} else
+				throw new Error('Incorrect codes for download!');
+		})
+
+		.then(function (res) {
+			// Создаем архив ZIP
+			let archive = archiver('zip', {
+				zlib: { level: 9 }
+			});
+
+			let text = '<b>Магнет-ссылки:</b>\n\n';
+			for (let i in res) {
+				if (res.hasOwnProperty(i)) {
+					const buffer = Buffer.from(res[i], 'utf8');
+					const torrent = parseTorrent(buffer);
+
+					text += ('<code>' + parseTorrent.toMagnetURI({
+						name: torrent.name,
+						infoHash: torrent.infoHash,
+						announce: torrent.announce
+					}) + '</code>\n\n');
+
+					archive.append(buffer, {name: `${torrent.name}.torrent`});
+				}
+			}
+
+			// Завершаем компоновку архива
+			archive.finalize();
+
+			// Создаем временный массив temp для будущего Buffer
+			let temp = [];
+			archive.on('data', function (chunk) {
+				// Стримим содержимое архива пачками chunk в temp
+				temp.push(chunk);
+			});
+
+			archive.on('error', function (error) {
+				reject(error);
+			});
+
+			// По завершению стрима собираем Buffer
+			archive.on('end', function () {
+				const buffer = Buffer.concat(temp);
+				console.log(buffer);
+
+				r.db('lostfilm').table('serials')
+					.get(parseInt(match[1] || match[4]))
+
+					.then(function (res) {
+						// Собираем название архива и отправляем Buffer Телеграму
+						const fileName = `${res.alias}_s${match[2] || match[5]}e${match[3]|| 'All'}.zip`;
+						bot.sendMessage(msg.chat.id, text, parse_html);
+						bot.sendDocument(msg.chat.id, buffer, {}, fileName);
+					})
+
+					.catch(function (error) {
+						throw new Error(error);
+					});
+			});
+		})
+
 		.catch(function (error) {
-			console.warn(error.message);
+			console.warn(error);
+			bot.sendMessage(msg.chat.id, 'Что-то пошло не так...');
 		});
 });
 
@@ -284,36 +331,39 @@ bot.onText(/^\/mark_(\d+)_(\d+)_(\d+)|^\/mark_(\d+)_(\d+)/, function (msg, match
 
 		.then(function (res) {
 			if (res !== null && res.cookie !== undefined) {
-				const j = request.jar();
-				const cookie = request.cookie(res.cookie);
-				const url = 'https://www.lostfilm.tv';
-				j.setCookie(cookie, url);
-
-				const options = {
-					method: 'POST',
-					url: 'https://lostfilm.tv/ajaxik.php',
-					jar: j,
-					formData: formData
-				};
-
-				request(options, function (err, res, body) {
-					if (err) console.warn(err.message);
-
-					body = JSON.parse(body);
-
-					if (body.result === 'on')
-						bot.sendMessage(msg.chat.id, 'Серия/сезон отмечен просмотренным!');
-
-					if (body.result === 'off')
-						bot.sendMessage(msg.chat.id, 'Серия/сезон отмечен непросмотренным!')
-				});
+				return res;
 			}
 			else
 				bot.sendMessage(msg.chat.id, 'Авторизуйтесь! /login');
 		})
 
+		.then(function (res) {
+			const j = request.jar();
+			const cookie = request.cookie(res.cookie);
+			const url = 'https://www.lostfilm.tv';
+			j.setCookie(cookie, url);
+
+			const options = {
+				url: 'https://lostfilm.tv/ajaxik.php',
+				jar: j,
+				formData: formData,
+				json: true
+			};
+
+			return request.post(options);
+		})
+
+		.then(function (res) {
+			if (res.result === 'on')
+				bot.sendMessage(msg.chat.id, 'Серия/сезон отмечен просмотренным!');
+
+			if (res.result === 'off')
+				bot.sendMessage(msg.chat.id, 'Серия/сезон отмечен непросмотренным!')
+		})
+
 		.catch(function (error) {
 			console.warn(error.message);
+			bot.sendMessage(msg.chat.id, 'Что-то пошло не так...');
 		});
 });
 
@@ -324,40 +374,44 @@ bot.onText(/^\/fav_(\d+)/, function (msg, match) {
 
 		.then(function (res) {
 			if (res !== null && res.cookie !== undefined) {
-				const j = request.jar();
-				const cookie = request.cookie(res.cookie);
-				const url = 'https://www.lostfilm.tv';
-				j.setCookie(cookie, url);
-
-				const options = {
-					method: 'POST',
-					url: 'https://lostfilm.tv/ajaxik.php',
-					jar: j,
-					formData: {
-						act: 'serial',
-						type: 'follow',
-						id: parseInt(match[1])
-					}
-				};
-
-				request(options, function (err, res, body) {
-					if (err) console.warn(err.message);
-
-					body = JSON.parse(body);
-
-					if (body.result === 'on')
-						bot.sendMessage(msg.chat.id, 'Сериал добавлен в избранное!');
-
-					if (body.result === 'off')
-						bot.sendMessage(msg.chat.id, 'Сериал удален из избранного!')
-				});
+				return res;
 			} else
 				bot.sendMessage(msg.chat.id, 'Авторизуйтесь! /login');
 		})
 
-		.catch(function (error) {
-			console.warn(error.message);
+		.then(function (res) {
+			const j = request.jar();
+			const cookie = request.cookie(res.cookie);
+			const url = 'https://www.lostfilm.tv';
+			j.setCookie(cookie, url);
+
+			const options = {
+				method: 'POST',
+				url: 'https://lostfilm.tv/ajaxik.php',
+				jar: j,
+				formData: {
+					act: 'serial',
+					type: 'follow',
+					id: parseInt(match[1])
+				},
+				json: true
+			};
+
+			return request.post(options);
 		})
+
+		.then(function (res) {
+			if (res.result === 'on')
+				bot.sendMessage(msg.chat.id, 'Сериал добавлен в избранное!');
+
+			if (res.result === 'off')
+				bot.sendMessage(msg.chat.id, 'Сериал удален из избранного!');
+		})
+
+		.catch(function (error) {
+			console.warn(error);
+			bot.sendMessage(msg.chat.id, 'Что-то пошло не так...');
+		});
 });
 
 // Сервисная команда для обновления всех существующих сериалов в базе.
@@ -375,33 +429,32 @@ bot.onText(/^\/update/, async function () {
 				o: cycle * 10,
 				s: 3,
 				t: 0
-			}
+			},
+			json: true
 		};
 
 		cycle++;
 
 		const part = new Promise(function (resolve, reject) {
-			request(options, function (err, res, body) {
-				if (err) reject(err);
+			request.post(options)
+				.then(function (body) {
+					if (body.data.length < 10)
+						flag = false;
 
-				body = JSON.parse(body);
-				if (body.data.length < 10)
-					flag = false;
+					body = fixId(body);
 
-				body = fixId(body);
+					return r.db('lostfilm').table('serials')
+						.insert(body, {conflict: 'update'});
+				})
 
-				r.db('lostfilm').table('serials')
-					.insert(body, {conflict: 'update'})
+				.then(function (res) {
+					resolve(res)
+				})
 
-					.then(function (status) {
-						resolve(status);
-					})
-
-					.catch(function (error) {
-						reject(error);
-					})
+				.catch(function (error) {
+					reject(error);
+				});
 			});
-		});
 
 		console.log(await part);
 	} while (flag);
@@ -425,31 +478,35 @@ bot.onText(/^\/search|🔍Поиск/, function (msg) {
 		{reply_markup: {force_reply: true}})
 
 		.then(function (res) {
-			bot.onReplyToMessage(res.chat.id, res.message_id, function (res) {
-				r.branch(
-					r.expr(res.text).match("\\p{Latin}+").ne(null),
-					dbRequest('latin', res.text),
-					dbRequest('cyrillic', res.text)
-				)
-					.then(function (serials) {
-						let text = `Найдено: <b>${serials.length} совп.</b>\n\n`;
-						for (let i in serials) {
-							if (serials.hasOwnProperty(i))
-								text += `${serials[i].title} (${serials[i].title_orig})\n/about_${serials[i].id} /full_${serials[i].id} /fav_${serials[i].id}\n\n`;
-						}
-
-						bot.sendMessage(res.chat.id, text, keyboard);
-					})
-
-					.catch(function (error) {
-						console.warn(error.message);
-					})
+			return new Promise(function (resolve) {
+				bot.onReplyToMessage(res.chat.id, res.message_id, function (res) {
+					resolve(res);
+				});
 			});
+		})
+
+		.then(function (res) {
+			return r.branch(
+				r.expr(res.text).match("\\p{Latin}+").ne(null),
+				dbRequest('latin', res.text),
+				dbRequest('cyrillic', res.text)
+			);
+		})
+
+		.then(function (res) {
+			let text = `Найдено: <b>${res.length} совп.</b>\n\n`;
+			for (let i in res) {
+				if (res.hasOwnProperty(i))
+					text += `${res[i].title} (${res[i].title_orig})\n/about_${res[i].id} /full_${res[i].id} /fav_${res[i].id}\n\n`;
+			}
+
+			bot.sendMessage(msg.chat.id, text, keyboard);
 		})
 
 		.catch(function (error) {
 			console.warn(error.message);
-		})
+			bot.sendMessage(msg.chat.id, 'Что-то пошло не так...', keyboard);
+		});
 });
 
 // Логирование всех взаимодействий с ботом.

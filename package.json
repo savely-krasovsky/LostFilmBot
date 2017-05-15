@@ -14,8 +14,10 @@
     "console-stamp": "^0.2.5",
     "feedparser": "^2.2.0",
     "node-telegram-bot-api": "^0.27.1",
+    "parse-torrent": "^5.8.3",
     "ramda": "^0.23.0",
     "request": "^2.81.0",
+    "request-promise-native": "^1.0.4",
     "rethinkdbdash": "^2.3.28"
   }
 }
