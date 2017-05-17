@@ -173,150 +173,188 @@ bot.onText(/^\/login/, function (msg) {
 		});
 });
 
-// Загружает нужные нам торрент-файлы и пакует их в ZIP для отправки адресату.
-bot.onText(/^\/dl_(\d+)_(\d+)_(\d+)|^\/dl_(\d+)_(\d+)/, function (msg, match) {
-	let qs;
-	if (match[3] !== undefined)
-		qs = {c: match[1], s: match[2], e: match[3]};
-	else
-		qs = {c: match[4], s: match[5], e: 999};
+global.download = function(from_id, serial, season, episode, torrentOnly) {
+	// Флаг для пользователей личного бота.
+	// Требуется, когда нужна загрузка определенного торрента, а не архива.
+	if (torrentOnly === undefined)
+		torrentOnly = false;
 
-	r.table('users')
-		.get(msg.from.id)
+	return new Promise(function (resolve, reject) {
+		r.table('users')
+			.get(from_id)
 
-		.then(function (res) {
-			if (res !== null && res.cookie !== undefined) {
-				return res;
-			} else {
-				bot.sendMessage(msg.chat.id, 'Авторизуйтесь! /login');
-				throw new Error('[/dl] User not authorized!');
-			}
-		})
+			.then(function (res) {
+				if (res !== null && res.cookie !== undefined) {
+					return res;
+				} else
+					throw new Error('[/dl] User not authorized!');
+			})
 
-		.then(function (res) {
-			const j = request.jar();
-			const cookie = request.cookie(res.cookie);
-			const url = 'https://www.lostfilm.tv';
-			j.setCookie(cookie, url);
+			.then(function (res) {
+				const j = request.jar();
+				const cookie = request.cookie(res.cookie);
+				const url = 'https://www.lostfilm.tv';
+				j.setCookie(cookie, url);
 
-			// Делаем запрос в некую поисковую систему LostFilm
-			// которая принимает три параметра: c, s, e (сериал, сезон, эпизод)
-			// и отправляет в ответ запрос на переадресацию
-			const options = {
-				url: 'https://lostfilm.tv/v_search.php',
-				jar: j,
-				qs: qs,
-				transform: function (body) {
-					return cheerio.load(body)
-				}
-			};
+				// Делаем запрос в некую поисковую систему LostFilm
+				// которая принимает три параметра: c, s, e (сериал, сезон, эпизод)
+				// и отправляет в ответ запрос на переадресацию
+				const options = {
+					url: 'https://lostfilm.tv/v_search.php',
+					jar: j,
+					qs: {c: serial, s: season, e: episode},
+					transform: function (body) {
+						return cheerio.load(body);
+					}
+				};
 
-			return request.get(options);
-		})
+				return request.get(options);
+			})
 
-		.then(function ($) {
-			const options = {
-				url: $('body > a').attr('href'),
-				transform: function (body) {
-					return cheerio.load(body)
-				}
-			};
+			.then(function ($) {
+				const options = {
+					url: $('body > a').attr('href'),
+					transform: function (body) {
+						return cheerio.load(body);
+					}
+				};
 
-			return request.get(options);
-		})
+				return request.get(options);
+			})
 
-		.then(function ($) {
-			// В перспективе нам может понадобиться usess-код, расположенный внизу
-			// любой страницы retre.org, поэтому парсим и сохраняем в базу "на всякий"
-			const usess = /- (.+) ;/.exec($('.footer-banner.left > a').attr('title'))[1];
-			r.table('users')
-				.get(msg.from.id)
-				.update({
-					usess: usess
+			.then(function ($) {
+				// В перспективе нам может понадобиться usess-код, расположенный внизу
+				// любой страницы retre.org, поэтому парсим и сохраняем в базу "на всякий"
+				const usess = /- (.+) ;/.exec($('.footer-banner.left > a').attr('title'))[1];
+				r.table('users')
+					.get(from_id)
+					.update({
+						usess: usess
+					});
+
+				const item = $('.inner-box--item');
+
+				if (item.is('.inner-box--item')) {
+					// Создаем массив file, содержащий три объекта с качеством и ссылкой на загрузку
+					let files = [];
+					item
+						.each(function () {
+							//const quality = $(this).children('.inner-box--label').text().trim();
+							const options = {
+								url: $('.inner-box--link.main > a', this).attr('href'),
+								encoding: null
+							};
+
+							files.push(request.get(options));
+						});
+
+					return Promise.all(files);
+				} else
+					throw new Error('Incorrect codes for download!');
+			})
+
+			.then(function (res) {
+				// Создаем архив ZIP
+				let archive = archiver('zip', {
+					zlib: { level: 9 }
 				});
 
-			const item = $('.inner-box--item');
+				let text = '<b>Магнет-ссылки:</b>\n\n';
+				for (let i in res) {
+					if (res.hasOwnProperty(i)) {
+						const buffer = Buffer.from(res[i], 'utf8');
+						const torrent = parseTorrent(buffer);
 
-			if (item.is('.inner-box--item')) {
-				// Создаем массив file, содержащий три объекта с качеством и ссылкой на загрузку
-				let files = [];
-				item
-					.each(function () {
-						//const quality = $(this).children('.inner-box--label').text().trim();
-						const options = {
-							url: $('.inner-box--link.main > a', this).attr('href'),
-							encoding: null
-						};
+						text += ('<code>' + parseTorrent.toMagnetURI({
+							name: torrent.name,
+							infoHash: torrent.infoHash,
+							announce: torrent.announce
+						}) + '</code>\n\n');
 
-						files.push(request.get(options));
-					});
+						// Чекаем наш флаг и существование конфигурации для личного бота
+						if (torrentOnly === true && config.private.download) {
+							const re = new RegExp(config.private.download.quality);
 
-				return Promise.all(files);
-			} else
-				throw new Error('Incorrect codes for download!');
-		})
+							// Регуляркой чекаем, какой нам нужно формат отдать в промайз
+							if (re.exec(torrent.name))
+								resolve({
+									magnet: text,
+									filename: `${torrent.name}.torrent`,
+									buffer: buffer
+								});
+						}
 
-		.then(function (res) {
-			// Создаем архив ZIP
-			let archive = archiver('zip', {
-				zlib: { level: 9 }
-			});
-
-			let text = '<b>Магнет-ссылки:</b>\n\n';
-			for (let i in res) {
-				if (res.hasOwnProperty(i)) {
-					const buffer = Buffer.from(res[i], 'utf8');
-					const torrent = parseTorrent(buffer);
-
-					text += ('<code>' + parseTorrent.toMagnetURI({
-						name: torrent.name,
-						infoHash: torrent.infoHash,
-						announce: torrent.announce
-					}) + '</code>\n\n');
-
-					archive.append(buffer, {name: `${torrent.name}.torrent`});
+						archive.append(buffer, {name: `${torrent.name}.torrent`});
+					}
 				}
-			}
 
-			// Завершаем компоновку архива
-			archive.finalize();
+				// Завершаем компоновку архива
+				archive.finalize();
 
-			// Создаем временный массив temp для будущего Buffer
-			let temp = [];
-			archive.on('data', function (chunk) {
-				// Стримим содержимое архива пачками chunk в temp
-				temp.push(chunk);
+				// Создаем временный массив temp для будущего Buffer
+				let temp = [];
+				archive.on('data', function (chunk) {
+					// Стримим содержимое архива пачками chunk в temp
+					temp.push(chunk);
+				});
+
+				archive.on('error', function (error) {
+					throw new Error(error);
+				});
+
+				// По завершению стрима собираем Buffer
+				archive.on('end', function () {
+					const buffer = Buffer.concat(temp);
+					r.table('serials')
+						.get(serial)
+
+						.then(function(res) {
+							let filename = '';
+							if (episode === 999)
+								filename = `${res.alias}_S${season}`;
+							else
+								filename = `${res.alias}_S${season}E${episode}`;
+
+							resolve({
+								magnet: text,
+								filename: filename,
+								buffer: buffer
+							});
+						})
+
+						.catch(function (error) {
+							throw new Error(error);
+						})
+				});
+			})
+
+			.catch(function (error) {
+				reject(error);
 			});
+	});
+};
 
-			archive.on('error', function (error) {
-				throw new Error(error);
-			});
+// Загружает нужные нам торрент-файлы и пакует их в ZIP для отправки адресату.
+bot.onText(/^\/dl_(\d+)_(\d+)_(\d+)|^\/dl_(\d+)_(\d+)/, function (msg, match) {
+	let serial, season, episode;
+	if (match[3] !== undefined) {
+		serial = parseInt(match[1]);
+		season = parseInt(match[2]);
+		episode = parseInt(match[3]);
+	} else {
+		serial = parseInt(match[4]);
+		season = parseInt(match[5]);
+		episode = 999;
+	}
 
-			// По завершению стрима собираем Buffer
-			archive.on('end', function () {
-				const buffer = Buffer.concat(temp);
-				console.log(buffer);
-
-				r.table('serials')
-					.get(parseInt(match[1] || match[4]))
-
-					.then(function (res) {
-						// Собираем название архива и отправляем Buffer Телеграму
-						const fileName = `${res.alias}_s${match[2] || match[5]}e${match[3]|| 'All'}.zip`;
-						bot.sendMessage(msg.chat.id, text, parse_html);
-						bot.sendDocument(msg.chat.id, buffer, {}, fileName);
-					})
-
-					.catch(function (error) {
-						throw new Error(error);
-					});
-			});
+	download(msg.from.id, serial, season, episode)
+		.then(function (res) {
+			bot.sendDocument(msg.chat.id, res.buffer, {}, res.filename);
 		})
 
 		.catch(function (error) {
 			console.warn(error.message);
-			bot.sendMessage(msg.chat.id, 'Что-то пошло не так...');
-		});
+		})
 });
 
 // Отмечает серию или сезон, как Просмотренный (или наоборот) через API Lostfilm.

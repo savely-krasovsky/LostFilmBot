@@ -13,6 +13,7 @@
     "cheerio": "^0.22.0",
     "console-stamp": "^0.2.5",
     "feedparser": "^2.2.0",
+    "fs": "0.0.1-security",
     "node-telegram-bot-api": "^0.27.1",
     "parse-torrent": "^5.8.3",
     "ramda": "^0.23.0",

@@ -3,6 +3,7 @@
  */
 const stream = require('stream');
 const FeedParser = require('feedparser');
+const fs = require('fs');
 
 function hashCode(str){
 	let hash = 0;
@@ -158,6 +159,12 @@ module.exports = function () {
 										text = '<b>' + serial.title + '</b>\n' +
 											'Полностью вышел ' + res.new.season + ' сезон.\n' +
 											'Загрузить: /dl_' +	res.serial + '_' + res.new.season;
+
+									// Сохраняем файл для пользователей личного бота
+									if (res.users[i].id === config.private.download.id) {
+										const file = await download(res.users[i].id, res.serial, res.new.season, res.new.episode, true);
+										fs.writeFileSync(`torrents/${file.filename}`, file.buffer);
+									}
 
 									console.log(await bot.sendMessage(res.users[i].id, text, parse_html));
 								}
