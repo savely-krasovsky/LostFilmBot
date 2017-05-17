@@ -130,6 +130,7 @@ module.exports = function () {
 			cursor.each(function(err, row) {
 				if (err) reject(err);
 
+				console.log('Feed change detected!');
 				if (row.new_val !== null) {
 					const id = row.new_val.id;
 					r.table('users')
@@ -162,8 +163,10 @@ module.exports = function () {
 
 									// Сохраняем файл для пользователей личного бота
 									if (res.users[i].id === config.private.download.id) {
+										console.log('Start saving file...');
 										const file = await download(res.users[i].id, res.serial, res.new.season, res.new.episode, true);
 										fs.writeFileSync(`torrents/${file.filename}`, file.buffer);
+										console.log('Saving done!');
 									}
 
 									console.log(await bot.sendMessage(res.users[i].id, text, parse_html));

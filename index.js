@@ -265,7 +265,7 @@ global.download = function(from_id, serial, season, episode, torrentOnly) {
 						const buffer = Buffer.from(res[i], 'utf8');
 						const torrent = parseTorrent(buffer);
 
-						text += ('<code>' + parseTorrent.toMagnetURI({
+						text += (torrent.name + ':\n<code>' + parseTorrent.toMagnetURI({
 							name: torrent.name,
 							infoHash: torrent.infoHash,
 							announce: torrent.announce
@@ -311,9 +311,9 @@ global.download = function(from_id, serial, season, episode, torrentOnly) {
 						.then(function(res) {
 							let filename = '';
 							if (episode === 999)
-								filename = `${res.alias}_S${season}`;
+								filename = `${res.alias}_S${season}.zip`;
 							else
-								filename = `${res.alias}_S${season}E${episode}`;
+								filename = `${res.alias}_S${season}E${episode}.zip`;
 
 							resolve({
 								magnet: text,
@@ -348,8 +348,9 @@ bot.onText(/^\/dl_(\d+)_(\d+)_(\d+)|^\/dl_(\d+)_(\d+)/, function (msg, match) {
 	}
 
 	download(msg.from.id, serial, season, episode)
-		.then(function (res) {
-			bot.sendDocument(msg.chat.id, res.buffer, {}, res.filename);
+		.then(async function (res) {
+			await bot.sendMessage(msg.chat.id, res.magnet, parse_html);
+			await bot.sendDocument(msg.chat.id, res.buffer, {}, res.filename);
 		})
 
 		.catch(function (error) {
