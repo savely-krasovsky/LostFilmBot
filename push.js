@@ -65,7 +65,7 @@ module.exports = function () {
 								// Делаем запрос в базу с фильтром по названию,
 								// чтобы узнать ID фильма. Узкое место:
 								// Мы предполагаем, что фильм с таким название только ОДИН
-								r.db('lostfilm').table('serials')
+								r.table('serials')
 									.filter({'title_orig': title})
 
 									.then(function (res) {
@@ -92,7 +92,7 @@ module.exports = function () {
 													date: new Date(hashCode(title + res[0].id + parseInt(num[1])))
 												};
 
-											return r.db('lostfilm').table('feed')
+											return r.table('feed')
 												.insert(series);
 										}
 									})
@@ -124,14 +124,14 @@ module.exports = function () {
 
 	setInterval(fetch, 1000 * 60 * 3);
 
-	r.db('lostfilm').table('feed').changes()
+	r.table('feed').changes()
 		.then(function (cursor) {
 			cursor.each(function(err, row) {
 				if (err) reject(err);
 
 				if (row.new_val !== null) {
 					const id = row.new_val.id;
-					r.db('lostfilm').table('users')
+					r.table('users')
 						.filter(function (user) {
 							return user('favorites').contains(function (fav) {
 								return fav('id').eq(id)
@@ -145,7 +145,6 @@ module.exports = function () {
 								serial: id
 							};
 
-							console.log(res);
 							for (let i in res.users) {
 								if (res.users.hasOwnProperty(i)) {
 									const serial = R.find(R.propEq('id', res.serial))(res.users[i].favorites);

@@ -5,7 +5,7 @@ module.exports = {
 	// Считает кол-во сезонов в одном сериале
 	getPageCount: function (data) {
 		return new Promise(function (resolve, reject) {
-			r.db('lostfilm').table('serials')
+			r.table('serials')
 				.get(data.s)
 
 				.then(function (serial) {
@@ -34,7 +34,7 @@ module.exports = {
 		let text = '';
 
 		return new Promise(function(resolve, reject) {
-			r.db('lostfilm').table('serials')
+			r.table('serials')
 				.get(data.s)
 
 				.then(function (serial) {

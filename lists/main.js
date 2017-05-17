@@ -5,7 +5,7 @@ module.exports = {
 	// Считает кол-во страниц для общего /list
 	getPageCount: function() {
 		return new Promise(function (resolve, reject) {
-			r.db('lostfilm').table('serials').count()
+			r.table('serials').count()
 				.then(function (res) {
 					resolve(Math.ceil(res / 10));
 				})
@@ -20,7 +20,7 @@ module.exports = {
 	getPage: function(data) {
 		return new Promise(function (resolve, reject) {
 			const temp = data.p * 10;
-			r.db('lostfilm').table('serials')
+			r.table('serials')
 				.orderBy(r.asc('title'))
 				.slice(temp - 10, temp)
 

@@ -28,7 +28,12 @@ const TelegramBot = require('node-telegram-bot-api');
 global.bot = new TelegramBot(config.private.token, { polling: true });
 
 // Драйвер для работы с базой данных RethinkDB
-global.r = require('rethinkdbdash')();
+global.r = require('rethinkdbdash')({
+	db: 'lostfilm',
+	servers: [
+		{host: '192.168.1.2', port: 28015}
+	]
+});
 // Либа по типу Underscore для функционального программирования
 global.R = require('ramda');
 
@@ -148,7 +153,7 @@ bot.onText(/^\/login/, function (msg) {
 
 		.then(function (res) {
 			if (res.body.success && res.body.success === true)
-				return r.db('lostfilm').table('users')
+				return r.table('users')
 					.insert({
 						id: msg.from.id,
 						cookie: res.cookie
@@ -176,7 +181,7 @@ bot.onText(/^\/dl_(\d+)_(\d+)_(\d+)|^\/dl_(\d+)_(\d+)/, function (msg, match) {
 	else
 		qs = {c: match[4], s: match[5], e: 999};
 
-	r.db('lostfilm').table('users')
+	r.table('users')
 		.get(msg.from.id)
 
 		.then(function (res) {
@@ -224,7 +229,7 @@ bot.onText(/^\/dl_(\d+)_(\d+)_(\d+)|^\/dl_(\d+)_(\d+)/, function (msg, match) {
 			// В перспективе нам может понадобиться usess-код, расположенный внизу
 			// любой страницы retre.org, поэтому парсим и сохраняем в базу "на всякий"
 			const usess = /- (.+) ;/.exec($('.footer-banner.left > a').attr('title'))[1];
-			r.db('lostfilm').table('users')
+			r.table('users')
 				.get(msg.from.id)
 				.update({
 					usess: usess
@@ -292,7 +297,7 @@ bot.onText(/^\/dl_(\d+)_(\d+)_(\d+)|^\/dl_(\d+)_(\d+)/, function (msg, match) {
 				const buffer = Buffer.concat(temp);
 				console.log(buffer);
 
-				r.db('lostfilm').table('serials')
+				r.table('serials')
 					.get(parseInt(match[1] || match[4]))
 
 					.then(function (res) {
@@ -330,7 +335,7 @@ bot.onText(/^\/mark_(\d+)_(\d+)_(\d+)|^\/mark_(\d+)_(\d+)/, function (msg, match
 			val: `${match[4]}-${match[5]}`
 		};
 
-	r.db('lostfilm').table('users')
+	r.table('users')
 		.get(msg.from.id)
 
 		.then(function (res) {
@@ -375,7 +380,7 @@ bot.onText(/^\/mark_(\d+)_(\d+)_(\d+)|^\/mark_(\d+)_(\d+)/, function (msg, match
 
 // Отмечает сериал как Избранный (или наоборот) через API Lostfilm.
 bot.onText(/^\/fav_(\d+)/, function (msg, match) {
-	r.db('lostfilm').table('users')
+	r.table('users')
 		.get(msg.from.id)
 
 		.then(function (res) {
@@ -451,7 +456,7 @@ bot.onText(/^\/update/, async function () {
 
 					body = fixId(body);
 
-					return r.db('lostfilm').table('serials')
+					return r.table('serials')
 						.insert(body, {conflict: 'update'});
 				})
 
@@ -475,7 +480,7 @@ bot.onText(/^\/search|🔍Поиск/, function (msg) {
 		else if (type === 'latin')
 			type = 'title_orig';
 
-		return r.db('lostfilm').table('serials').orderBy(type)
+		return r.table('serials').orderBy(type)
 			.filter(function (serials) {
 				return serials(type).match('(?i)' + text);
 			}).limit(10);
@@ -553,7 +558,7 @@ bot.onText(/^\/schedule|^\/myschedule|^Расписание|^Моё распис
 	else if (match[0] === '/schedule' || match[0] === 'Расписание')
 		base_url = 'https://www.lostfilm.tv/schedule/my_0/date_ru';
 
-	r.db('lostfilm').table('users')
+	r.table('users')
 		.get(msg.from.id)
 
 		.then(function (res) {
@@ -603,7 +608,7 @@ bot.onText(/^\/schedule|^\/myschedule|^Расписание|^Моё распис
 						};
 
 						try {
-							const serial = await r.db('lostfilm').table('serials')
+							const serial = await r.table('serials')
 								.filter({'title_orig': temp.title_orig}).nth(0);
 
 							text += `${temp.title} (${temp.title_orig})\n${temp.num} ${temp.howLong} <i>(${temp.date})</i>\n/about_${serial.id} /full_${serial.id}\n\n`

@@ -5,7 +5,7 @@ module.exports = {
 	// Считает кол-во страниц для личного /mylist
 	getPageCount: function (from_id) {
 		return new Promise(function (resolve, reject) {
-			r.db('lostfilm').table('users')
+			r.table('users')
 				.get(from_id)('favorites').count()
 
 				.then(function (res) {
@@ -22,7 +22,7 @@ module.exports = {
 	getPage: function (data, from_id) {
 		return new Promise(function (resolve, reject) {
 			const temp = data.p * 10;
-			r.db('lostfilm').table('users')
+			r.table('users')
 				.get(from_id)('favorites')
 				.orderBy(r.asc('title'))
 				.slice(temp - 10, temp)

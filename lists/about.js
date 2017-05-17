@@ -5,7 +5,7 @@ module.exports = {
 	// Считает кол-во страниц для личного /about
 	getPageCount: function (data) {
 		return new Promise(function (resolve, reject) {
-			r.db('lostfilm').table('serials')
+			r.table('serials')
 				.get(data.s)
 
 				.then(function (res) {
@@ -21,7 +21,7 @@ module.exports = {
 	// Считает кол-во страниц для личного /about
 	getPage: function (data) {
 		return new Promise(function (resolve, reject) {
-			r.db('lostfilm').table('serials')
+			r.table('serials')
 				.get(data.s)
 
 				.then(function (res) {

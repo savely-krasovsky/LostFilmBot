@@ -56,7 +56,7 @@ module.exports = function () {
 
 	// ОБНОВЛЯЕТ ВЕСЬ и отображает первую страницу личного /mylist
 	bot.onText(/^\/mylist|^Избранное/, async function (msg) {
-		r.db('lostfilm').table('users')
+		r.table('users')
 			.get(msg.from.id)
 
 			.then(async function (res) {
@@ -66,7 +66,7 @@ module.exports = function () {
 					const url = 'https://www.lostfilm.tv';
 					j.setCookie(cookie, url);
 
-					r.db('lostfilm').table('users').get(msg.from.id)
+					r.table('users').get(msg.from.id)
 						.update({
 							favorites: []
 						})
@@ -105,7 +105,7 @@ module.exports = function () {
 
 									res = fixId(res);
 
-									return r.db('lostfilm').table('users').get(msg.from.id)
+									return r.table('users').get(msg.from.id)
 										.update({
 											favorites: r.row('favorites').spliceAt(0, res)
 										});
@@ -157,7 +157,7 @@ module.exports = function () {
 	});
 
 	bot.onText(/^\/about_(.+)/, function (msg, match) {
-		r.db('lostfilm').table('serials')
+		r.table('serials')
 			.get(parseInt(match[1]))
 
 			.then(function (res) {
@@ -180,7 +180,7 @@ module.exports = function () {
 				const $ = res[1];
 				text += $('.text-block.description > .body').text();
 
-				r.db('lostfilm').table('serials').get(parseInt(match[1]))
+				r.table('serials').get(parseInt(match[1]))
 					.update({
 						description: text
 					})
