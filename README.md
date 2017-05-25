@@ -1,7 +1,7 @@
 # LostFilmBot
 _**Attention**: Supports only Russian localization yet!_
 
-### [Live bot](https://t.me/LostFilm_bot)
+### [Live bot](https://t.me/LFTVbot)
 Telegram bot for [LostFilm.TV](https://www.lostfilm.tv/).
 Powered by [RethinkDB](https://rethinkdb.com).
 
