@@ -169,7 +169,12 @@ module.exports = function () {
 										console.log('Saving done!');
 									}
 
-									console.log(await bot.sendMessage(res.users[i].id, text, parse_html));
+									console.log(res.users[i].id);
+									try {
+										const status = await bot.sendMessage(res.users[i].id, text, parse_html);
+									} catch (error) {
+										console.warn(error.message);
+									}
 								}
 							}
 						})

@@ -25,7 +25,12 @@ const keyboard = {
 
 // Либа для работы с Телеграмом
 const TelegramBot = require('node-telegram-bot-api');
-global.bot = new TelegramBot(config.private.token, { polling: true });
+global.bot = new TelegramBot(config.private.token, {
+	webHook: {
+		port: 5000
+	}
+});
+//{ polling: true });
 
 // Драйвер для работы с базой данных RethinkDB
 global.r = require('rethinkdbdash')({
@@ -265,7 +270,7 @@ global.download = function(from_id, serial, season, episode, torrentOnly) {
 						const buffer = Buffer.from(res[i], 'utf8');
 						const torrent = parseTorrent(buffer);
 
-						text += (torrent.name + ':\n<code>' + parseTorrent.toMagnetURI({
+						text += ('<b>' + torrent.name + '</b>\n<code>' + parseTorrent.toMagnetURI({
 							name: torrent.name,
 							infoHash: torrent.infoHash,
 							announce: torrent.announce
