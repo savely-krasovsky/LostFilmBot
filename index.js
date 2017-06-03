@@ -25,12 +25,7 @@ const keyboard = {
 
 // Либа для работы с Телеграмом
 const TelegramBot = require('node-telegram-bot-api');
-global.bot = new TelegramBot(config.private.token, {
-	webHook: {
-		port: 5000
-	}
-});
-//{ polling: true });
+global.bot = new TelegramBot(config.private.token, config.private.bot);
 
 // Драйвер для работы с базой данных RethinkDB
 global.r = require('rethinkdbdash')({
@@ -48,7 +43,11 @@ require('./push')();
 
 const parseTorrent = require('parse-torrent');
 
-// Конвертирует ID из string в int для правильной сортировки в БД
+/**
+ * Конвертирует ID из string в int для правильной сортировки в БД
+ * @param body
+ * @returns {Array}
+ */
 global.fixId = function fixId(body) {
 	let temp = [];
 	for (let i in body.data)
@@ -178,6 +177,17 @@ bot.onText(/^\/login/, function (msg) {
 		});
 });
 
+/**
+ * Функция для загрузки торрент-файлов и упаковки их в zip-архив.
+ * Последний параметр torrentOnly не обязателен и требуется только для обладателей
+ * личного бота. Берет нужное качество из конфига и загружает только его.
+ * @param from_id
+ * @param serial
+ * @param season
+ * @param episode
+ * @param torrentOnly
+ * @returns {Promise}
+ */
 global.download = function(from_id, serial, season, episode, torrentOnly) {
 	// Флаг для пользователей личного бота.
 	// Требуется, когда нужна загрузка определенного торрента, а не архива.
@@ -518,6 +528,12 @@ bot.onText(/^\/update/, async function () {
 });
 
 bot.onText(/^\/search|🔍Поиск/, function (msg) {
+    /**
+	 * Возвращает нужный запрос в зависимости от детектированного языка
+     * @param type
+     * @param text
+     * @returns {Promise}
+     */
 	function dbRequest(type, text) {
 		if (type === 'cyrillic')
 			type = 'title';
@@ -566,6 +582,12 @@ bot.onText(/^\/search|🔍Поиск/, function (msg) {
 		});
 });
 
+/**
+ * Парсит расписание из объекта $, который понимает cheerio.
+ * На выходе готовый массив.
+ * @param $
+ * @returns {Array}
+ */
 function parseSchedule($) {
 	const table = $('tbody > tr');
 

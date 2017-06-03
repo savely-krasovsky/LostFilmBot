@@ -17,6 +17,11 @@ function hashCode(str){
 }
 
 module.exports = function () {
+    /**
+	 * Функция ничего не принимает и не возвращает.
+	 * Однако изменения, к которым её выполнение приводит, изменяет данные в базе.
+	 * И это приводит к срабатыванию блок ниже.
+     */
 	function fetch() {
 		const feedparser = new FeedParser();
 
@@ -125,6 +130,9 @@ module.exports = function () {
 
 	setInterval(fetch, 1000 * 60 * 3);
 
+    /**
+	 * Этот блок обрабатывает изменения в базе и начинает рассылку.
+     */
 	r.table('feed').changes()
 		.then(function (cursor) {
 			cursor.each(function(err, row) {
