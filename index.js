@@ -699,7 +699,7 @@ bot.onText(/^\/schedule|^\/myschedule|^Расписание|^Моё распис
 });
 
 bot.onText(/^\/donate/, function (msg) {
-	bot.sendMessage(msg.chat.id, "Небольшую сумму на поддержание и разработку можно подкинуть <a href='https://krasovsky.me/bots'>здесь</a>.");
+	bot.sendMessage(msg.chat.id, "Небольшую сумму на поддержание и разработку можно подкинуть <a href='https://krasovsky.me/bots'>здесь</a>.", {parse_mode: 'HTML'});
 });
 
 // Логирование всех взаимодействий с ботом.
